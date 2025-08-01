@@ -1,10 +1,8 @@
-
 from flask import Flask, request
 import requests
-import os
 
 app = Flask(__name__)
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TOKEN = "7697429165:AAExg9I4l246gZ9V-dDxLplkCw889RZerRE"
 URL = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
 @app.route("/")
