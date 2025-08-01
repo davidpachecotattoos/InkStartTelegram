@@ -1,0 +1,2 @@
+# InkStartTelegram
+Repository tecnico
