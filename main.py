@@ -12,14 +12,8 @@ app = Flask(__name__)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.com/webhook")
-MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")  # es: -1001234567890
+MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")
 BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-
-# Set webhook
-@app.before_first_request
-def set_webhook():
-    r = requests.get(f"{BOT_URL}/setWebhook?url={WEBHOOK_URL}")
-    print("Webhook set:", r.json())
 
 @app.route("/")
 def home():
@@ -36,7 +30,6 @@ def webhook():
     user_lang = msg["from"].get("language_code", "it")
     lang_map = {"it": "italian", "en": "english", "es": "spanish"}
     user_language = lang_map.get(user_lang, "italian")
-
     first_name = msg["from"].get("first_name", "Utente")
 
     if "text" in msg:
@@ -49,6 +42,11 @@ def webhook():
     elif "photo" in msg:
         notify_admin(f"📸 Immagine ricevuta da {first_name} ({user_language})")
         send_message(chat_id, "Bella immagine! Vuoi raccontarmi cosa rappresenta per te?")
+
+        # Optional: analisi con Vision (da attivare quando vuoi)
+        # file_id = msg["photo"][-1]["file_id"]
+        # vision_result = analyze_image_with_vision(file_id)
+        # send_message(chat_id, f"🧠 Analisi immagine: {vision_result}")
 
     elif "video" in msg:
         notify_admin(f"🎥 Video ricevuto da {first_name} ({user_language})")
@@ -79,11 +77,7 @@ def notify_admin(message):
         send_message(MY_MONITOR_CHAT_ID, message)
 
 def human_delay(text):
-    length = len(text)
-    if length < 100:
-        time.sleep(random.uniform(2, 5))
-    else:
-        time.sleep(random.uniform(5, 10))
+    time.sleep(random.uniform(2, 5) if len(text) < 100 else random.uniform(5, 10))
 
 def ask_gpt(user_message, language="italian"):
     try:
@@ -113,13 +107,11 @@ Dopo che il cliente accetta la call, non rispondere più.
             "spanish": "Eres David, tatuador en Milán. Habla de forma cercana como en un chat. Nunca digas que eres un bot. Pregunta la idea del tatuaje, cuándo y dónde lo quieren, y su significado. Invítales a una videollamada entre las 18:30 y 19:30. Añade: Reserva aquí: https://calendly.com/davidpachecotattoos/30min"
         }
 
-        prompt = prompts.get(language.lower(), prompts["italian"])
-
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": prompt},
+                {"role": "system", "content": prompts[language]},
                 {"role": "user", "content": user_message}
             ]
         )
@@ -130,20 +122,17 @@ Dopo che il cliente accetta la call, non rispondere più.
 
 def transcribe_voice(file_id):
     try:
-        # Step 1: Ottieni file_path
         file_info = requests.get(f"{BOT_URL}/getFile?file_id={file_id}").json()
         file_path = file_info['result']['file_path']
-
-        # Step 2: Scarica il file vocale
         file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+
         response = requests.get(file_url)
-        audio_path = "/tmp/audio.ogg"
-        with open(audio_path, "wb") as f:
+        temp_path = "/tmp/audio.ogg"
+        with open(temp_path, "wb") as f:
             f.write(response.content)
 
-        # Step 3: Invia a Whisper API
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        with open(audio_path, "rb") as audio_file:
+        with open(temp_path, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file
@@ -152,6 +141,40 @@ def transcribe_voice(file_id):
     except Exception as e:
         return f"[Errore trascrizione vocale: {str(e)}]"
 
+# def analyze_image_with_vision(file_id):
+#     try:
+#         file_info = requests.get(f"{BOT_URL}/getFile?file_id={file_id}").json()
+#         file_path = file_info['result']['file_path']
+#         file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+
+#         image_response = requests.get(file_url)
+#         with open("/tmp/photo.jpg", "wb") as f:
+#             f.write(image_response.content)
+
+#         client = openai.OpenAI(api_key=OPENAI_API_KEY)
+#         with open("/tmp/photo.jpg", "rb") as img:
+#             result = client.chat.completions.create(
+#                 model="gpt-4-vision-preview",
+#                 messages=[
+#                     {"role": "user", "content": [
+#                         {"type": "text", "text": "Cosa vedi in questa immagine?"},
+#                         {"type": "image_url", "image_url": {"url": "attachment://photo.jpg"}}
+#                     ]}
+#                 ],
+#                 max_tokens=300
+#             )
+#         return result.choices[0].message.content.strip()
+#     except Exception as e:
+#         return f"[Errore Vision: {str(e)}]"
+
+def set_webhook():
+    try:
+        r = requests.get(f"{BOT_URL}/setWebhook?url={WEBHOOK_URL}")
+        print("✅ Webhook impostato:", r.json())
+    except Exception as e:
+        print("❌ Errore nel set webhook:", e)
+
 if __name__ == "__main__":
+    set_webhook()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=True)
