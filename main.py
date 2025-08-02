@@ -1,11 +1,17 @@
 from flask import Flask, request
 import requests
 import os
-import openai
 from datetime import datetime
 import pytz
 import time
 import random
+
+# Ensure openai is imported only if available
+try:
+    import openai
+    openai_available = True
+except ModuleNotFoundError:
+    openai_available = False
 
 app = Flask(__name__)
 
@@ -15,7 +21,8 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.c
 MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")
 BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-openai.api_key = OPENAI_API_KEY
+if openai_available:
+    openai.api_key = OPENAI_API_KEY
 
 @app.route("/")
 def home():
@@ -78,6 +85,8 @@ def human_delay(text):
     time.sleep(random.uniform(2, 5) if len(text) < 100 else random.uniform(5, 10))
 
 def ask_gpt(user_message, language="italian"):
+    if not openai_available:
+        return "Errore GPT: modulo openai non disponibile."
     try:
         milan_time = datetime.now(pytz.timezone("Europe/Rome"))
         if milan_time.hour < 11 or milan_time.hour >= 19:
@@ -118,6 +127,8 @@ Dopo che il cliente accetta la call, non rispondere più.
         return f"Errore GPT: {str(e)}"
 
 def transcribe_voice(file_id):
+    if not openai_available:
+        return "[Errore trascrizione vocale: modulo openai non disponibile]"
     try:
         file_info = requests.get(f"{BOT_URL}/getFile?file_id={file_id}").json()
         file_path = file_info['result']['file_path']
