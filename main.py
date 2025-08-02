@@ -54,4 +54,5 @@ def send_telegram_message(chat_id, message):
     requests.post(TELEGRAM_URL, json=payload)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+
