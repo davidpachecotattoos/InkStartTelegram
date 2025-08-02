@@ -9,20 +9,76 @@ import random
 
 app = Flask(__name__)
 
+# Variabili di ambiente
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-MY_MONITOR_CHAT_ID = -1002564272914  # ID canale privato per notifiche
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.com/webhook")
+MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")  # es: -1001234567890
+BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-def send_telegram_message(chat_id, message):
-    payload = {
+# Set webhook
+@app.before_first_request
+def set_webhook():
+    r = requests.get(f"{BOT_URL}/setWebhook?url={WEBHOOK_URL}")
+    print("Webhook set:", r.json())
+
+@app.route("/")
+def home():
+    return "InkStart Telegram attivo!", 200
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json()
+    if not data or "message" not in data:
+        return "no data", 400
+
+    msg = data["message"]
+    chat_id = msg["chat"]["id"]
+    user_lang = msg["from"].get("language_code", "it")
+    lang_map = {"it": "italian", "en": "english", "es": "spanish"}
+    user_language = lang_map.get(user_lang, "italian")
+
+    first_name = msg["from"].get("first_name", "Utente")
+
+    if "text" in msg:
+        user_text = msg["text"]
+        notify_admin(f"🧵 Nuovo messaggio da {first_name} ({user_language}):\n{user_text}")
+        reply = ask_gpt(user_text, user_language)
+        human_delay(reply)
+        send_message(chat_id, reply)
+
+    elif "photo" in msg:
+        notify_admin(f"📸 Immagine ricevuta da {first_name} ({user_language})")
+        send_message(chat_id, "Bella immagine! Vuoi raccontarmi cosa rappresenta per te?")
+
+    elif "video" in msg:
+        notify_admin(f"🎥 Video ricevuto da {first_name} ({user_language})")
+        send_message(chat_id, "Video interessante! C’è un significato dietro che vuoi condividere?")
+
+    elif "voice" in msg:
+        notify_admin(f"🎤 Vocale ricevuto da {first_name} ({user_language})")
+        send_message(chat_id, "Ricevuto il vocale! Intanto se vuoi scrivimi qualche dettaglio.")
+
+    else:
+        notify_admin(f"📦 Altro contenuto da {first_name} ({user_language})")
+        send_message(chat_id, "Ricevuto! Dimmi pure la tua idea.")
+
+    return "ok", 200
+
+def send_message(chat_id, text):
+    if len(text) > 250:
+        text = text[:247] + "..."
+    requests.post(f"{BOT_URL}/sendMessage", json={
         "chat_id": chat_id,
-        "text": message
-    }
-    requests.post(TELEGRAM_URL, json=payload)
+        "text": text
+    })
 
-def human_delay(reply_text):
-    length = len(reply_text)
+def notify_admin(message):
+    if MY_MONITOR_CHAT_ID:
+        send_message(MY_MONITOR_CHAT_ID, message)
+
+def human_delay(text):
+    length = len(text)
     if length < 100:
         time.sleep(random.uniform(2, 5))
     else:
@@ -67,38 +123,10 @@ Dopo che il cliente accetta la call, non rispondere più.
             ]
         )
         return response.choices[0].message.content.strip()
+
     except Exception as e:
         return f"Errore GPT: {str(e)}"
 
-@app.route("/")
-def home():
-    return "InkStart Telegram attivo!", 200
-
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    data = request.get_json()
-
-    if data is None or "message" not in data:
-        return "no data", 400
-
-    message = data["message"]
-    chat_id = message["chat"]["id"]
-    user_text = message.get("text", "")
-    user_lang = message["from"].get("language_code", "it")
-
-    lang_map = {"it": "italian", "en": "english", "es": "spanish"}
-    user_language = lang_map.get(user_lang, "italian")
-
-    # Inoltra messaggio nel canale privato di monitoraggio
-    monitor_msg = f"🧵 Nuovo messaggio:\n👤 {message['from'].get('first_name', 'Utente')} ({user_language})\n💬 {user_text}"
-    send_telegram_message(MY_MONITOR_CHAT_ID, monitor_msg)
-
-    # Risposta GPT con delay umano
-    gpt_reply = ask_gpt(user_text, user_language)
-    human_delay(gpt_reply)
-    send_telegram_message(chat_id, gpt_reply)
-
-    return "ok", 200
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=True)
