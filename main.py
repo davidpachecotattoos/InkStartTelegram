@@ -15,6 +15,8 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.c
 MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")
 BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
+openai.api_key = OPENAI_API_KEY
+
 @app.route("/")
 def home():
     return "InkStart Telegram attivo!", 200
@@ -103,8 +105,7 @@ Dopo che il cliente accetta la call, non rispondere più.
             "spanish": "Eres David, tatuador en Milán. Habla de forma cercana como en un chat. Nunca digas que eres un bot. Pregunta la idea del tatuaje, cuándo y dónde lo quieren, y su significado. Invítales a una videollamada entre las 18:30 y 19:30. Añade: Reserva aquí: https://calendly.com/davidpachecotattoos/30min"
         }
 
-        openai.api_key = OPENAI_API_KEY
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": prompts[language]},
@@ -127,10 +128,12 @@ def transcribe_voice(file_id):
         with open(temp_path, "wb") as f:
             f.write(response.content)
 
-        openai.api_key = OPENAI_API_KEY
         with open(temp_path, "rb") as audio_file:
-            transcript = openai.Audio.transcribe("whisper-1", audio_file)
-        return transcript["text"].strip()
+            transcript = openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        return transcript.text.strip()
     except Exception as e:
         return f"[Errore trascrizione vocale: {str(e)}]"
 
