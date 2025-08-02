@@ -33,40 +33,46 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
+    print("Ricevuto:", data)  # DEBUG
+
     if "message" in data and "text" in data["message"]:
         chat_id = data["message"]["chat"]["id"]
         user_message = data["message"]["text"]
+        print("Messaggio utente:", user_message)  # DEBUG
 
-        # Orario attuale in Italia
         now = datetime.now(tz)
         hour = now.hour
 
         if 8 <= hour < 20:
-            # Risposta GPT normale
-            response = openai.ChatCompletion.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": BASE_PROMPT},
-                    {"role": "user", "content": user_message}
-                ],
-                max_tokens=400,
-                temperature=0.5,
-            )
-            gpt_reply = response.choices[0].message.content.strip()
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": BASE_PROMPT},
+                        {"role": "user", "content": user_message}
+                    ],
+                    max_tokens=400,
+                    temperature=0.5,
+                )
+                gpt_reply = response.choices[0].message.content.strip()
+            except Exception as e:
+                gpt_reply = "Errore nella generazione della risposta. Prova tra qualche minuto."
+                print("Errore OpenAI:", e)  # DEBUG
         else:
-            # Risposta fuori orario
             gpt_reply = (
                 "Ciao! Grazie per il tuo messaggio. "
                 "Rispondo attivamente dalle 8:00 alle 20:00. "
                 "Ti scrivo appena torno operativo!"
             )
 
-        # Invia la risposta su Telegram
+        print("Risposta inviata:", gpt_reply)  # DEBUG
+
         payload = {
             "chat_id": chat_id,
             "text": gpt_reply
         }
-        requests.post(URL, json=payload)
+        r = requests.post(URL, json=payload)
+        print("Risposta Telegram:", r.text)  # DEBUG
 
     return "ok", 200
 
