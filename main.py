@@ -1,7 +1,7 @@
 from flask import Flask, request
 import requests
 import os
-import openai
+from openai import OpenAI
 from datetime import datetime
 import pytz
 import time
@@ -15,7 +15,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.c
 MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")
 BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 user_states = {}
 
@@ -116,14 +116,14 @@ Includi alla fine, solo se è il nono messaggio: "Per fissare la videochiamata c
             "spanish": f"Eres David, tatuador en Milán. Habla como en un chat natural. Nunca digas que eres un bot. Evita presentarte varias veces. Si recibes una transcripción de audio, respóndela y sigue la conversación. Paso {step}. Si es el paso 9, termina con: Reserva aquí: https://calendly.com/davidpachecotattoos/30min"
         }
 
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": prompts[language]},
                 {"role": "user", "content": user_message}
             ]
         )
-        return response["choices"][0]["message"]["content"].strip()
+        return response.choices[0].message.content.strip()
 
     except Exception as e:
         return f"Errore GPT: {str(e)}"
@@ -140,8 +140,11 @@ def transcribe_voice(file_id):
             f.write(response.content)
 
         with open(temp_path, "rb") as audio_file:
-            transcript = openai.Audio.transcribe("whisper-1", audio_file)
-        return transcript["text"].strip()
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        return transcript.text.strip()
     except Exception as e:
         return f"[Errore trascrizione vocale: {str(e)}]"
 
