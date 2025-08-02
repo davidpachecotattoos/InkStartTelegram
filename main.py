@@ -23,7 +23,7 @@ def ask_gpt(user_message):
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4-turbo",
             messages=[
                 {"role": "system", "content": "Sei InkStart, un assistente personale che aiuta i clienti a descrivere la loro idea di tatuaggio per poi guidarli alla prenotazione."},
                 {"role": "user", "content": user_message}
