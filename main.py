@@ -6,27 +6,25 @@ import pytz
 import time
 import random
 
-# Ensure openai is imported only if available
 try:
     import openai
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
     openai_available = True
-except ModuleNotFoundError:
+except ImportError:
     openai_available = False
 
 app = Flask(__name__)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.com/webhook")
 MY_MONITOR_CHAT_ID = os.environ.get("MONITOR_CHAT_ID")
 BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-if openai_available:
-    openai.api_key = OPENAI_API_KEY
 
 @app.route("/")
 def home():
     return "InkStart Telegram attivo!", 200
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -69,6 +67,7 @@ def webhook():
 
     return "ok", 200
 
+
 def send_message(chat_id, text):
     if len(text) > 250:
         text = text[:247] + "..."
@@ -77,16 +76,20 @@ def send_message(chat_id, text):
         "text": text
     })
 
+
 def notify_admin(message):
     if MY_MONITOR_CHAT_ID:
         send_message(MY_MONITOR_CHAT_ID, message)
 
+
 def human_delay(text):
     time.sleep(random.uniform(2, 5) if len(text) < 100 else random.uniform(5, 10))
+
 
 def ask_gpt(user_message, language="italian"):
     if not openai_available:
         return "Errore GPT: modulo openai non disponibile."
+
     try:
         milan_time = datetime.now(pytz.timezone("Europe/Rome"))
         if milan_time.hour < 11 or milan_time.hour >= 19:
@@ -126,9 +129,11 @@ Dopo che il cliente accetta la call, non rispondere più.
     except Exception as e:
         return f"Errore GPT: {str(e)}"
 
+
 def transcribe_voice(file_id):
     if not openai_available:
         return "[Errore trascrizione vocale: modulo openai non disponibile]"
+
     try:
         file_info = requests.get(f"{BOT_URL}/getFile?file_id={file_id}").json()
         file_path = file_info['result']['file_path']
@@ -148,6 +153,7 @@ def transcribe_voice(file_id):
     except Exception as e:
         return f"[Errore trascrizione vocale: {str(e)}]"
 
+
 def set_webhook():
     try:
         r = requests.get(f"{BOT_URL}/setWebhook?url={WEBHOOK_URL}")
@@ -155,7 +161,7 @@ def set_webhook():
     except Exception as e:
         print("❌ Errore nel set webhook:", e)
 
+
 if __name__ == "__main__":
     set_webhook()
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port = int(os.environ.get("PORT"
