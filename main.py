@@ -6,6 +6,8 @@ from datetime import datetime
 import pytz
 import time
 import random
+import json
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -17,7 +19,16 @@ BOT_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+STATE_FILE = "user_states.json"
 user_states = {}
+
+# Load state from file if exists
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE, "r") as f:
+        try:
+            user_states = json.load(f)
+        except:
+            user_states = {}
 
 @app.route("/")
 def home():
@@ -31,13 +42,14 @@ def webhook():
         return "ok", 200
 
     msg = data["message"]
-    chat_id = msg["chat"]["id"]
+    chat_id = str(msg["chat"]["id"])
     user_lang = msg["from"].get("language_code", "it")
     lang_map = {"it": "italian", "en": "english", "es": "spanish"}
     user_language = lang_map.get(user_lang, "italian")
     first_name = msg["from"].get("first_name", "Utente")
 
     user_states[chat_id] = user_states.get(chat_id, 0) + 1
+    save_states()
 
     if "text" in msg:
         user_text = msg["text"]
@@ -48,8 +60,6 @@ def webhook():
             send_message(chat_id, reply)
         elif user_states[chat_id] == 10:
             send_message(chat_id, "Per fissare la videochiamata clicca qui: https://calendly.com/davidpachecotattoos/30min")
-        else:
-            pass
 
     elif "photo" in msg:
         notify_admin(f"📸 Immagine ricevuta da {first_name} ({user_language})")
@@ -69,8 +79,6 @@ def webhook():
             send_message(chat_id, reply)
         elif user_states[chat_id] == 10:
             send_message(chat_id, "Per fissare la videochiamata clicca qui: https://calendly.com/davidpachecotattoos/30min")
-        else:
-            pass
 
     else:
         notify_admin(f"📦 Altro contenuto da {first_name} ({user_language})")
@@ -147,6 +155,24 @@ def transcribe_voice(file_id):
         return transcript.text.strip()
     except Exception as e:
         return f"[Errore trascrizione vocale: {str(e)}]"
+
+# def image_analysis(file_id):
+#     try:
+#         file_info = requests.get(f"{BOT_URL}/getFile?file_id={file_id}").json()
+#         file_path = file_info['result']['file_path']
+#         file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+#         response = requests.get(file_url)
+#         temp_path = "/tmp/image.jpg"
+#         with open(temp_path, "wb") as f:
+#             f.write(response.content)
+#         image = Image.open(temp_path)
+#         # Analisi visiva futura qui...
+#     except Exception as e:
+#         print("Errore analisi immagine:", e)
+
+def save_states():
+    with open(STATE_FILE, "w") as f:
+        json.dump(user_states, f)
 
 def set_webhook():
     try:
