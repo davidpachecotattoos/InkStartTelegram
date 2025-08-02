@@ -22,8 +22,9 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
+
     if not data or "message" not in data:
-        return "no data", 400
+        return "ok", 200  # Ignora messaggi non gestibili senza generare errore
 
     msg = data["message"]
     chat_id = msg["chat"]["id"]
