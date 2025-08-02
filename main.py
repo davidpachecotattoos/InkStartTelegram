@@ -9,7 +9,6 @@ import random
 
 app = Flask(__name__)
 
-# Variabili di ambiente
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://inkstarttelegram.onrender.com/webhook")
@@ -56,8 +55,10 @@ def webhook():
         send_message(chat_id, "Video interessante! C’è un significato dietro che vuoi condividere?")
 
     elif "voice" in msg:
-        notify_admin(f"🎤 Vocale ricevuto da {first_name} ({user_language})")
-        send_message(chat_id, "Ricevuto il vocale! Intanto se vuoi scrivimi qualche dettaglio.")
+        file_id = msg["voice"]["file_id"]
+        transcription = transcribe_voice(file_id)
+        notify_admin(f"🎤 Vocale da {first_name} ({user_language}):\n{transcription}")
+        send_message(chat_id, f"Ho ascoltato il vocale! Ecco cosa ho capito:\n{transcription}")
 
     else:
         notify_admin(f"📦 Altro contenuto da {first_name} ({user_language})")
@@ -126,6 +127,30 @@ Dopo che il cliente accetta la call, non rispondere più.
 
     except Exception as e:
         return f"Errore GPT: {str(e)}"
+
+def transcribe_voice(file_id):
+    try:
+        # Step 1: Ottieni file_path
+        file_info = requests.get(f"{BOT_URL}/getFile?file_id={file_id}").json()
+        file_path = file_info['result']['file_path']
+
+        # Step 2: Scarica il file vocale
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+        response = requests.get(file_url)
+        audio_path = "/tmp/audio.ogg"
+        with open(audio_path, "wb") as f:
+            f.write(response.content)
+
+        # Step 3: Invia a Whisper API
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+        with open(audio_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+        return transcript.text.strip()
+    except Exception as e:
+        return f"[Errore trascrizione vocale: {str(e)}]"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
